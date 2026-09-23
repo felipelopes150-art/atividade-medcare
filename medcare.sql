@@ -6,10 +6,12 @@ CREATE TABLE pacientes (
     data_nascimento DATE NOT NULL,
     data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
 CREATE TABLE especialidades (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(50) UNIQUE NOT NULL
 );
+
 CREATE TABLE medicos (
     id SERIAL PRIMARY KEY,
     especialidade_id INT NOT NULL,
@@ -22,6 +24,7 @@ CREATE TABLE medicos (
         REFERENCES especialidades(id) 
         ON DELETE RESTRICT
 );
+
 CREATE TABLE consultas (
     id SERIAL PRIMARY KEY,
     medico_id INT NOT NULL,
@@ -38,6 +41,7 @@ CREATE TABLE consultas (
         REFERENCES pacientes(id) 
         ON DELETE CASCADE
 );
+
 CREATE TABLE exames_consulta (
     id SERIAL PRIMARY KEY,
     consulta_id INT NOT NULL,
@@ -49,23 +53,21 @@ CREATE TABLE exames_consulta (
         REFERENCES consultas(id) 
         ON DELETE CASCADE
 );
+
 INSERT INTO especialidades (nome) VALUES 
 ('Cardiologia'),
 ('Pediatria'),
 ('Dermatologia');
-
 
 INSERT INTO medicos (especialidade_id, nome, crm, valor_consulta) VALUES 
 (1, 'Dra. manuela urbano', 'CRM/SP 123456', 350.00),
 (2, 'Dr. davi domingos', 'CRM/SP 654321', 250.00),
 (3, 'Dra. nicolas gabriel', 'CRM/SP 789123', 300.00);
 
-
 INSERT INTO pacientes (nome, email, cpf, data_nascimento) VALUES 
 ('lucca matheus', 'lucca.matheus@email.com', '11122233344', '1985-05-12'),
 ('guilherme ribeiro', 'guilherme.ribeiro@email.com', '55566677788', '2010-08-25'),
 ('willer barros', 'willer.barros@email.com', '99900011122', '1998-11-03');
-
 
 INSERT INTO consultas (medico_id, paciente_id, data_hora, status) VALUES 
 (1, 1, '2026-03-10 09:00:00', 'Realizada'), 
@@ -73,24 +75,26 @@ INSERT INTO consultas (medico_id, paciente_id, data_hora, status) VALUES
 (2, 2, '2026-03-11 14:00:00', 'Realizada'), 
 (3, 1, '2026-03-12 11:00:00', 'Agendada');  
 
-
 INSERT INTO exames_consulta (consulta_id, nome_exame, valor_exame) VALUES 
 (1, 'Eletrocardiograma', 120.00),
 (1, 'Ecocardiograma', 250.00),
 (2, 'Hemograma Completo', 45.00),
 (3, 'Exame de Urina', 30.00);
 
+CREATE OR REPLACE VIEW vw_medicos_especialidades AS
 SELECT 
+    m.id AS medico_id,
     m.nome AS medico,
     m.crm,
     e.nome AS especialidade,
     m.valor_consulta
 FROM medicos m
-INNER JOIN especialidades e ON m.especialidade_id = e.id
-ORDER BY m.valor_consulta DESC;
+INNER JOIN especialidades e ON m.especialidade_id = e.id;
 
+CREATE OR REPLACE VIEW vw_consultas_detalhadas AS
 SELECT 
     c.id AS consulta_id,
+    p.nome AS paciente,
     c.data_hora,
     m.nome AS medico,
     e.nome AS especialidade,
@@ -98,10 +102,9 @@ SELECT
 FROM consultas c
 INNER JOIN pacientes p ON c.paciente_id = p.id
 INNER JOIN medicos m ON c.medico_id = m.id
-INNER JOIN especialidades e ON m.especialidade_id = e.id
-WHERE p.nome = 'Carlos Silva'
-ORDER BY c.data_hora ASC;
+INNER JOIN especialidades e ON m.especialidade_id = e.id;
 
+CREATE OR REPLACE VIEW vw_faturamento_atendimentos AS
 SELECT 
     c.id AS consulta_id,
     p.nome AS paciente,
@@ -113,24 +116,31 @@ FROM consultas c
 INNER JOIN pacientes p ON c.paciente_id = p.id
 INNER JOIN medicos m ON c.medico_id = m.id
 LEFT JOIN exames_consulta ex ON c.id = ex.consulta_id
-GROUP BY c.id, p.nome, m.nome, m.valor_consulta
-ORDER BY c.id;
+GROUP BY c.id, p.nome, m.nome, m.valor_consulta;
 
+CREATE OR REPLACE VIEW vw_faturamento_por_especialidade AS
 SELECT 
-    m.nome AS medico,
-    m.crm,
-    e.nome AS especialidade,
-    m.valor_consulta
-FROM medicos m
-INNER JOIN especialidades e ON m.especialidade_id = e.id
-WHERE m.valor_consulta > 300.00;
-
-SELECT 
+    e.id AS especialidade_id,
     e.nome AS especialidade,
     COUNT(c.id) AS quantidade_consultas,
     COALESCE(SUM(m.valor_consulta), 0.00) AS faturamento_consultas
 FROM especialidades e
 INNER JOIN medicos m ON e.id = m.especialidade_id
 LEFT JOIN consultas c ON m.id = c.medico_id AND c.status = 'Realizada'
-GROUP BY e.id, e.nome
+GROUP BY e.id, e.nome;
+
+SELECT * FROM vw_medicos_especialidades 
+ORDER BY valor_consulta DESC;
+
+SELECT * FROM vw_medicos_especialidades 
+WHERE valor_consulta > 300.00;
+
+SELECT * FROM vw_consultas_detalhadas 
+WHERE paciente = 'lucca matheus'
+ORDER BY data_hora ASC;
+
+SELECT * FROM vw_faturamento_atendimentos 
+ORDER BY consulta_id;
+
+SELECT * FROM vw_faturamento_por_especialidade 
 ORDER BY faturamento_consultas DESC;
