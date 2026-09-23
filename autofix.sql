@@ -1,18 +1,18 @@
 CREATE TABLE clientes (
-	id serial PRIMARY KEY,
-	nome VARCHAR(100) not NULL,
-	email VARCHAR(100) UNIQUE not null,
-	telefone varchar(20) not null,
-	cpf VARCHAR(11) unique not null,
-	data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    telefone VARCHAR(20) NOT NULL,
+    cpf VARCHAR(11) UNIQUE NOT NULL,
+    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE mecanicos (
-	id serial PRIMARY key,
-	nome VARCHAR(100) NOT null,
-	especialidade varchar(100) not null, 
-	valor_hora NUMERIC(10,2) NOT null CHECK (valor_hora > 0)
-	);
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    especialidade VARCHAR(100) NOT NULL, 
+    valor_hora NUMERIC(10,2) NOT NULL CHECK (valor_hora > 0)
+);
 
 CREATE TABLE veiculos (
     id SERIAL PRIMARY KEY,
@@ -55,7 +55,7 @@ CREATE TABLE pecas_os (
     
     CONSTRAINT fk_peca_os 
         FOREIGN KEY (os_id) 
-        REFERENCES ordens_servico(id) 
+        REFERENCES ordens_servicos(id) 
         ON DELETE CASCADE
 );
 
@@ -70,8 +70,8 @@ INSERT INTO mecanicos (nome, especialidade, valor_hora) VALUES
 ('willer barros', 'Elétrica e Injeção', 100.00);
 
 INSERT INTO veiculos (cliente_id, placa, modelo, marca, ano) VALUES 
-(1, 'ABC1D23', 'Civic 2.0', 'Honda', 2020),       
-(1, 'XYZ9K88', 'Fit 1.5', 'Honda', 2018),         
+(1, 'ABC1D23', 'Civic 2.0', 'Honda', 2020),        
+(1, 'XYZ9K88', 'Fit 1.5', 'Honda', 2018),          
 (2, 'KLR4M55', 'Corolla 2.0', 'Toyota', 2021),    
 (3, 'JHG8T77', 'Onix 1.0 Turbo', 'Chevrolet', 2022);
 
@@ -87,7 +87,9 @@ INSERT INTO pecas_os (os_id, nome_peca, quantidade, valor_unitario) VALUES
 (2, 'Pastilha de Freio Dianteira', 1, 150.00),
 (4, 'Bateria 60Ah', 1, 420.00);
 
+CREATE OR REPLACE VIEW vw_veiculos_clientes AS
 SELECT 
+    v.id AS veiculo_id,
     v.marca,
     v.modelo,
     v.placa,
@@ -95,23 +97,23 @@ SELECT
     c.nome AS proprietario,
     c.telefone
 FROM veiculos v
-INNER JOIN clientes c ON v.cliente_id = c.id
-ORDER BY v.marca ASC, v.modelo ASC;
+INNER JOIN clientes c ON v.cliente_id = c.id;
 
+CREATE OR REPLACE VIEW vw_ordens_servicos_detalhadas AS
 SELECT 
     os.id AS os_id,
+    c.nome AS cliente,
     v.placa,
     v.modelo,
     os.data_abertura,
     m.nome AS mecanico,
     os.status
-FROM ordens_servico os
+FROM ordens_servicos os
 INNER JOIN veiculos v ON os.veiculo_id = v.id
 INNER JOIN clientes c ON v.cliente_id = c.id
-INNER JOIN mecanicos m ON os.mecanico_id = m.id
-WHERE c.nome = 'Davi Pedrinho'
-ORDER BY os.data_abertura DESC;
+INNER JOIN mecanicos m ON os.mecanico_id = m.id;
 
+CREATE OR REPLACE VIEW vw_faturamento_os AS
 SELECT 
     os.id AS os_id,
     v.placa,
@@ -119,26 +121,42 @@ SELECT
     os.valor_mao_obra,
     COALESCE(SUM(p.quantidade * p.valor_unitario), 0.00) AS total_pecas,
     (os.valor_mao_obra + COALESCE(SUM(p.quantidade * p.valor_unitario), 0.00)) AS valor_total_os
-FROM ordens_servico os
+FROM ordens_servicos os
 INNER JOIN veiculos v ON os.veiculo_id = v.id
 INNER JOIN mecanicos m ON os.mecanico_id = m.id
 LEFT JOIN pecas_os p ON os.id = p.os_id
-GROUP BY os.id, v.placa, m.nome, os.valor_mao_obra
-ORDER BY os.id;
+GROUP BY os.id, v.placa, m.nome, os.valor_mao_obra;
 
+CREATE OR REPLACE VIEW vw_mecanicos AS
 SELECT 
+    id AS mecanico_id,
     nome AS mecanico,
     especialidade,
     valor_hora
-FROM mecanicos
-WHERE valor_hora > 90.00
-ORDER BY valor_hora DESC;
+FROM mecanicos;
 
+CREATE OR REPLACE VIEW vw_faturamento_por_especialidade AS
 SELECT 
     m.especialidade,
     COUNT(os.id) AS qtd_servicos_concluidos,
     COALESCE(SUM(os.valor_mao_obra), 0.00) AS faturamento_mao_obra
 FROM mecanicos m
-LEFT JOIN ordens_servico os ON m.id = os.mecanico_id AND os.status = 'Concluida'
-GROUP BY m.especialidade
+LEFT JOIN ordens_servicos os ON m.id = os.mecanico_id AND os.status = 'Concluida'
+GROUP BY m.especialidade;
+
+SELECT * FROM vw_veiculos_clientes 
+ORDER BY marca ASC, modelo ASC;
+
+SELECT * FROM vw_ordens_servicos_detalhadas 
+WHERE cliente = 'Davi Pedrinho'
+ORDER BY data_abertura DESC;
+
+SELECT * FROM vw_faturamento_os 
+ORDER BY os_id;
+
+SELECT * FROM vw_mecanicos 
+WHERE valor_hora > 90.00
+ORDER BY valor_hora DESC;
+
+SELECT * FROM vw_faturamento_por_especialidade 
 ORDER BY faturamento_mao_obra DESC;
